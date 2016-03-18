@@ -180,13 +180,23 @@ public class ChartViewPortHandler: NSObject
         return zoom(scaleX: 0.7, scaleY: 0.7, x: x, y: y)
     }
     
+    /// Resets all zooming and dragging and makes the chart fit a minimum scale of Y.
+    public func fitScreen(minScaleY: CGFloat) -> CGAffineTransform
+    {
+        _maxScaleX = 1.0
+        _maxScaleY = minScaleY
+        
+        var matrix = CGAffineTransform()
+        matrix = _touchMatrix
+        matrix.ty = minScaleY
+        
+        return matrix
+    }
+    
     /// Resets all zooming and dragging and makes the chart fit exactly it's bounds.
     public func fitScreen() -> CGAffineTransform
     {
-        _minScaleX = 1.0
-        _minScaleY = 1.0
-
-        return CGAffineTransformIdentity
+        return fitScreen(1.0)
     }
     
     /// Centers the viewport around the specified position (x-index and y-value) in the chart.
