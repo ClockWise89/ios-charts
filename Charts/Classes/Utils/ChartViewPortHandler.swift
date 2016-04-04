@@ -14,6 +14,7 @@
 import Foundation
 import CoreGraphics
 
+/// Class that contains information about the charts current viewport settings, including offsets, scale & translation levels, ...
 public class ChartViewPortHandler: NSObject
 {
     /// matrix used for touch events
@@ -43,7 +44,10 @@ public class ChartViewPortHandler: NSObject
     /// contains the current scale factor of the y-axis
     private var _scaleY = CGFloat(1.0)
     
+    /// current translation (drag distance) on the x-axis
     private var _transX = CGFloat(0.0)
+    
+    /// current translation (drag distance) on the y-axis
     private var _transY = CGFloat(0.0)
     
     /// offset that allows the chart to be dragged over its bounds on the x-axis
@@ -56,6 +60,7 @@ public class ChartViewPortHandler: NSObject
     {
     }
     
+    /// Constructor - don't forget calling setChartDimens(...)
     public init(width: CGFloat, height: CGFloat)
     {
         super.init()
@@ -146,18 +151,33 @@ public class ChartViewPortHandler: NSObject
         return _contentRect.size.height
     }
     
-    public var contentRect: CGRect { return _contentRect; }
+    public var contentRect: CGRect
+    {
+        return _contentRect
+    }
     
     public var contentCenter: CGPoint
     {
         return CGPoint(x: _contentRect.origin.x + _contentRect.size.width / 2.0, y: _contentRect.origin.y + _contentRect.size.height / 2.0)
     }
     
-    public var chartHeight: CGFloat { return _chartHeight; }
+    public var chartHeight: CGFloat
+    { 
+        return _chartHeight
+    }
     
-    public var chartWidth: CGFloat { return _chartWidth; }
+    public var chartWidth: CGFloat
+    { 
+        return _chartWidth
+    }
 
     // MARK: - Scaling/Panning etc.
+    
+    /// Zooms by the specified zoom factors.
+    public func zoom(scaleX scaleX: CGFloat, scaleY: CGFloat) -> CGAffineTransform
+    {
+        return CGAffineTransformScale(_touchMatrix, scaleX, scaleY)
+    }
     
     /// Zooms around the specified center
     public func zoom(scaleX scaleX: CGFloat, scaleY: CGFloat, x: CGFloat, y: CGFloat) -> CGAffineTransform
@@ -193,13 +213,47 @@ public class ChartViewPortHandler: NSObject
         return matrix
     }
     
+    /// Sets the scale factor to the specified values.
+    public func setZoom(scaleX scaleX: CGFloat, scaleY: CGFloat) -> CGAffineTransform
+    {
+        var matrix = _touchMatrix
+        matrix.a = scaleX
+        matrix.d = scaleY
+        return matrix
+    }
+    
+    /// Sets the scale factor to the specified values. x and y is pivot.
+    public func setZoom(scaleX scaleX: CGFloat, scaleY: CGFloat, x: CGFloat, y: CGFloat) -> CGAffineTransform
+    {
+        var matrix = _touchMatrix
+        matrix.a = 1.0
+        matrix.d = 1.0
+        matrix = CGAffineTransformTranslate(matrix, x, y)
+        matrix = CGAffineTransformScale(matrix, scaleX, scaleY)
+        matrix = CGAffineTransformTranslate(matrix, -x, -y)
+        return matrix
+    }
+    
     /// Resets all zooming and dragging and makes the chart fit exactly it's bounds.
     public func fitScreen() -> CGAffineTransform
     {
         return fitScreen(1.0)
     }
     
+    /// Translates to the specified point.
+    public func translate(pt pt: CGPoint) -> CGAffineTransform
+    {
+        let translateX = pt.x - offsetLeft
+        let translateY = pt.y - offsetTop
+        
+        let matrix = CGAffineTransformConcat(_touchMatrix, CGAffineTransformMakeTranslation(-translateX, -translateY))
+        
+        return matrix
+    }
+    
     /// Centers the viewport around the specified position (x-index and y-value) in the chart.
+    /// Centering the viewport outside the bounds of the chart is not possible.
+    /// Makes most sense in combination with the setScaleMinima(...) method.
     public func centerViewPort(pt pt: CGPoint, chart: ChartViewBase)
     {
         let translateX = pt.x - offsetLeft
@@ -226,7 +280,7 @@ public class ChartViewPortHandler: NSObject
     /// limits the maximum scale and X translation of the given matrix
     private func limitTransAndScale(inout matrix matrix: CGAffineTransform, content: CGRect?)
     {
-        // min scale-x is 1, max is the max CGFloat
+        // min scale-x is 1
         _scaleX = min(max(_minScaleX, matrix.a), _maxScaleX)
         
         // min scale-y is 1
@@ -243,12 +297,10 @@ public class ChartViewPortHandler: NSObject
         }
         
         let maxTransX = -width * (_scaleX - 1.0)
-        let newTransX = min(max(matrix.tx, maxTransX - _transOffsetX), _transOffsetX)
-        _transX = newTransX;
+        _transX = min(max(matrix.tx, maxTransX - _transOffsetX), _transOffsetX)
         
         let maxTransY = height * (_scaleY - 1.0)
-        let newTransY = max(min(matrix.ty, maxTransY + _transOffsetY), -_transOffsetY)
-        _transY = newTransY;
+        _transY = max(min(matrix.ty, maxTransY + _transOffsetY), -_transOffsetY)
         
         matrix.tx = _transX
         matrix.a = _scaleX
@@ -256,6 +308,7 @@ public class ChartViewPortHandler: NSObject
         matrix.d = _scaleY
     }
     
+    /// Sets the minimum scale factor for the x-axis
     public func setMinimumScaleX(xScale: CGFloat)
     {
         var newValue = xScale
@@ -270,6 +323,7 @@ public class ChartViewPortHandler: NSObject
         limitTransAndScale(matrix: &_touchMatrix, content: _contentRect)
     }
     
+    /// Sets the maximum scale factor for the x-axis
     public func setMaximumScaleX(xScale: CGFloat)
     {
         _maxScaleX = xScale
@@ -277,6 +331,7 @@ public class ChartViewPortHandler: NSObject
         limitTransAndScale(matrix: &_touchMatrix, content: _contentRect)
     }
     
+    /// Sets the minimum and maximum scale factors for the x-axis
     public func setMinMaxScaleX(minScaleX minScaleX: CGFloat, maxScaleX: CGFloat)
     {
         var newMin = minScaleX
@@ -292,14 +347,7 @@ public class ChartViewPortHandler: NSObject
         limitTransAndScale(matrix: &_touchMatrix, content: _contentRect)
     }
     
-    
-    public func setMaximumScaleY(yScale: CGFloat)
-    {
-        _maxScaleY = yScale;
-        
-        limitTransAndScale(matrix: &_touchMatrix, content: _contentRect)
-    }
-    
+    /// Sets the minimum scale factor for the y-axis
     public func setMinimumScaleY(yScale: CGFloat)
     {
         var newValue = yScale
@@ -310,6 +358,14 @@ public class ChartViewPortHandler: NSObject
         }
         
         _minScaleY = newValue
+        
+        limitTransAndScale(matrix: &_touchMatrix, content: _contentRect)
+    }
+    
+    /// Sets the maximum scale factor for the y-axis
+    public func setMaximumScaleY(yScale: CGFloat)
+    {
+        _maxScaleY = yScale
         
         limitTransAndScale(matrix: &_touchMatrix, content: _contentRect)
     }
@@ -391,11 +447,37 @@ public class ChartViewPortHandler: NSObject
         return _scaleY
     }
     
+    /// - returns: the minimum x-scale factor
+    public var minScaleX: CGFloat
+    {
+        return _minScaleX
+    }
+    
+    /// - returns: the minimum y-scale factor
+    public var minScaleY: CGFloat
+    {
+        return _minScaleY
+    }
+    
+    /// - returns: the minimum x-scale factor
+    public var maxScaleX: CGFloat
+    {
+        return _maxScaleX
+    }
+    
+    /// - returns: the minimum y-scale factor
+    public var maxScaleY: CGFloat
+    {
+        return _maxScaleY
+    }
+    
+    /// - returns: the translation (drag / pan) distance on the x-axis
     public var transX: CGFloat
     {
         return _transX
     }
     
+    /// - returns: the translation (drag / pan) distance on the y-axis
     public var transY: CGFloat
     {
         return _transY
@@ -458,13 +540,27 @@ public class ChartViewPortHandler: NSObject
         return _transOffsetX <= 0.0 && _transOffsetY <= 0.0 ? true : false
     }
     
+    /// - returns: true if the chart is not yet fully zoomed out on the x-axis
     public var canZoomOutMoreX: Bool
     {
         return (_scaleX > _minScaleX)
     }
     
+    /// - returns: true if the chart is not yet fully zoomed in on the x-axis
     public var canZoomInMoreX: Bool
     {
         return (_scaleX < _maxScaleX)
+    }
+    
+    /// - returns: true if the chart is not yet fully zoomed out on the y-axis
+    public var canZoomOutMoreY: Bool
+    {
+        return (_scaleY > _minScaleY)
+    }
+    
+    /// - returns: true if the chart is not yet fully zoomed in on the y-axis
+    public var canZoomInMoreY: Bool
+    {
+        return (_scaleY < _maxScaleY)
     }
 }
